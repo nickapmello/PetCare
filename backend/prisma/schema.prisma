@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Perfil {
+  ATENDENTE
+  ADMINISTRADOR
+}
+
+enum StatusAgendamento {
+  AGENDADO
+  CONCLUIDO
+  CANCELADO
+}
+
+model Usuario {
+  id           Int           @id @default(autoincrement())
+  nome         String
+  email        String        @unique
+  senhaHash    String        @map("senha_hash")
+  perfil       Perfil
+  agendamentos Agendamento[]
+
+  @@map("usuarios")
+}
+
+model Cliente {
+  id       Int      @id @default(autoincrement())
+  nome     String
+  cpf      String   @unique
+  telefone String
+  email    String
+  animais  Animal[]
+
+  @@map("clientes")
+}
+
+model Animal {
+  id             Int           @id @default(autoincrement())
+  nome           String
+  especie        String
+  raca           String
+  dataNascimento DateTime      @map("data_nascimento") @db.Date
+  clienteId      Int           @map("cliente_id")
+  cliente        Cliente       @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  agendamentos   Agendamento[]
+
+  @@map("animais")
+}
+
+model Servico {
+  id                  Int                  @id @default(autoincrement())
+  nome                String
+  descricao           String
+  preco               Decimal              @db.Decimal(10, 2)
+  duracaoMin          Int                  @map("duracao_min")
+  agendamentoServicos AgendamentoServico[]
+
+  @@map("servicos")
+}
+
+model Agendamento {
+  id          Int                  @id @default(autoincrement())
+  dataHora    DateTime             @map("data_hora")
+  dataFim     DateTime             @map("data_fim")
+  status      StatusAgendamento    @default(AGENDADO)
+  observacoes String?
+  animalId    Int                  @map("animal_id")
+  usuarioId   Int                  @map("usuario_id")
+  animal      Animal               @relation(fields: [animalId], references: [id], onDelete: Restrict)
+  usuario     Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  servicos    AgendamentoServico[]
+
+  @@index([dataHora, dataFim])
+  @@map("agendamentos")
+}
+
+model AgendamentoServico {
+  agendamentoId Int         @map("agendamento_id")
+  servicoId     Int         @map("servico_id")
+  precoCobrado  Decimal     @map("preco_cobrado") @db.Decimal(10, 2)
+  agendamento   Agendamento @relation(fields: [agendamentoId], references: [id], onDelete: Cascade)
+  servico       Servico     @relation(fields: [servicoId], references: [id], onDelete: Restrict)
+
+  @@id([agendamentoId, servicoId])
+  @@map("agendamento_servicos")
+}
+

@@ -1,9 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatarCpf, normalizarCpf, validarCpf, validarEmail } from '../src/utils/cpf.js';
+import { normalizarTelefone, normalizarTexto } from '../src/utils/texto.js';
 import { formatarAgendamento } from '../src/services/agendamentoService.js';
 
-describe('Utilitários de CPF e E-mail', () => {
+describe('Utilitários de CPF, E-mail e Texto', () => {
+  it('normaliza texto removendo acentos, espaços extras e maiúsculas', () => {
+    assert.equal(normalizarTexto('  Thór   da  Silva '), 'thor da silva');
+    assert.equal(normalizarTexto('JOSÉ  ÁVILA'), 'jose avila');
+    assert.equal(normalizarTelefone('(43) 99911-2233'), '43999112233');
+  });
   it('valida CPFs válidos com e sem pontuação', () => {
     assert.equal(validarCpf('111.444.777-35'), true);
     assert.equal(validarCpf('52998224725'), true);

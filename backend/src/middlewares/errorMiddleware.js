@@ -30,7 +30,7 @@ export function errorMiddleware(err, req, res, next) {
   // Violação de constraint EXCLUDE USING gist no PostgreSQL (sobreposição de horário)
   if (err?.code === '23P01' || (err?.message && err.message.includes('agendamentos_sem_sobreposicao'))) {
     return res.status(409).json({
-      erro: 'Conflito de horário: já existe outro atendimento agendado para este período.',
+      erro: 'Horário indisponível. Já existe um atendimento nesse período. Escolha outro horário.',
     });
   }
 

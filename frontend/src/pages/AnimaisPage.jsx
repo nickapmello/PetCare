@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, History, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  History,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { Modal } from '../components/Modal';
+import { ClienteSelect } from '../components/ClienteSelect';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatarData, formatarDataHora, formatarMoeda, paraInputDate } from '../utils/formatters';
 
@@ -26,6 +36,7 @@ export function AnimaisPage() {
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState(FORM_INICIAL);
   const [erroForm, setErroForm] = useState('');
+  const [avisoDuplicidade, setAvisoDuplicidade] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
   const [historicoDados, setHistoricoDados] = useState(null);
@@ -62,11 +73,9 @@ export function AnimaisPage() {
 
   function abrirNovo() {
     setEditandoId(null);
-    setForm({
-      ...FORM_INICIAL,
-      clienteId: clientes[0]?.id ? String(clientes[0].id) : '',
-    });
+    setForm(FORM_INICIAL);
     setErroForm('');
+    setAvisoDuplicidade(null);
     setModalFormAberto(true);
   }
 
@@ -80,7 +89,22 @@ export function AnimaisPage() {
       clienteId: String(animal.clienteId),
     });
     setErroForm('');
+    setAvisoDuplicidade(null);
     setModalFormAberto(true);
+  }
+
+  function atualizarCampoForm(campo, valor) {
+    setForm((prev) => ({ ...prev, [campo]: valor }));
+    if (avisoDuplicidade) setAvisoDuplicidade(null);
+  }
+
+  function voltarEConsultarPet(pet) {
+    const clienteStr = String(pet.clienteId);
+    setModalFormAberto(false);
+    setAvisoDuplicidade(null);
+    setFiltroClienteId(clienteStr);
+    setBusca(pet.nome);
+    carregarDados(pet.nome, clienteStr);
   }
 
   async function abrirHistorico(animal) {
@@ -98,6 +122,28 @@ export function AnimaisPage() {
     }
   }
 
+  async function persistirNovoAnimal() {
+    setSalvando(true);
+    setErroForm('');
+    try {
+      await apiRequest('/animais', {
+        method: 'POST',
+        body: {
+          ...form,
+          clienteId: Number(form.clienteId),
+        },
+      });
+      setMensagemSucesso('Animal cadastrado com sucesso.');
+      setAvisoDuplicidade(null);
+      setModalFormAberto(false);
+      await carregarDados(busca, filtroClienteId);
+    } catch (err) {
+      setErroForm(err.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function handleSalvar(e) {
     e.preventDefault();
     setErroForm('');
@@ -108,21 +154,46 @@ export function AnimaisPage() {
       return;
     }
 
+    if (editandoId) {
+      setSalvando(true);
+      try {
+        await apiRequest(`/animais/${editandoId}`, {
+          method: 'PUT',
+          body: {
+            ...form,
+            clienteId: Number(form.clienteId),
+          },
+        });
+        setMensagemSucesso('Animal atualizado com sucesso.');
+        setModalFormAberto(false);
+        await carregarDados(busca, filtroClienteId);
+      } catch (err) {
+        setErroForm(err.message);
+      } finally {
+        setSalvando(false);
+      }
+      return;
+    }
+
+    // No cadastro, verifica entre os pets do mesmo tutor se já existe nome + espécie iguais
     setSalvando(true);
     try {
-      const body = {
-        ...form,
-        clienteId: Number(form.clienteId),
-      };
-      if (editandoId) {
-        await apiRequest(`/animais/${editandoId}`, { method: 'PUT', body });
-        setMensagemSucesso('Animal atualizado com sucesso.');
-      } else {
-        await apiRequest('/animais', { method: 'POST', body });
-        setMensagemSucesso('Animal cadastrado com sucesso.');
+      const checagem = await apiRequest('/animais/verificar-duplicidade', {
+        method: 'POST',
+        body: {
+          nome: form.nome,
+          especie: form.especie,
+          clienteId: Number(form.clienteId),
+        },
+      });
+
+      if (checagem.possiveisDuplicados?.length > 0) {
+        setAvisoDuplicidade(checagem.possiveisDuplicados);
+        return;
       }
-      setModalFormAberto(false);
-      await carregarDados(busca, filtroClienteId);
+
+      setSalvando(false);
+      await persistirNovoAnimal();
     } catch (err) {
       setErroForm(err.message);
     } finally {
@@ -286,22 +357,52 @@ export function AnimaisPage() {
           </div>
         )}
 
+        {avisoDuplicidade && avisoDuplicidade.length > 0 && (
+          <div className="alert alert-warning" role="status">
+            <div className="alert-header">
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <span>
+                <strong>Possível pet duplicado para este tutor:</strong> já existe animal com o mesmo nome e
+                espécie vinculado a este cliente. Compare os dados abaixo:
+              </span>
+            </div>
+            <ul className="alert-details-list">
+              {avisoDuplicidade.map((pet) => (
+                <li key={pet.id}>
+                  <strong>{pet.nome}</strong> ({pet.especie}) — Raça: <strong>{pet.raca}</strong> •
+                  Nascimento: <strong>{formatarData(pet.dataNascimento)}</strong>
+                </li>
+              ))}
+            </ul>
+            <div className="alert-actions">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => voltarEConsultarPet(avisoDuplicidade[0])}
+              >
+                Voltar e consultar pet existente
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={salvando}
+                onClick={persistirNovoAnimal}
+              >
+                {salvando ? 'Salvando...' : 'Confirmar que é outro animal'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <form className="form-grid" onSubmit={handleSalvar}>
           <div className="field">
             <label htmlFor="ani-tutor">Cliente tutor</label>
-            <select
+            <ClienteSelect
               id="ani-tutor"
+              clientes={clientes}
               value={form.clienteId}
-              onChange={(e) => setForm({ ...form, clienteId: e.target.value })}
-              required
-            >
-              <option value="">Selecione um cliente...</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(clienteId) => atualizarCampoForm('clienteId', clienteId)}
+            />
           </div>
 
           <div className="form-row-2">
@@ -311,7 +412,7 @@ export function AnimaisPage() {
                 id="ani-nome"
                 type="text"
                 value={form.nome}
-                onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                onChange={(e) => atualizarCampoForm('nome', e.target.value)}
                 required
               />
             </div>
@@ -322,7 +423,7 @@ export function AnimaisPage() {
                 id="ani-nasc"
                 type="date"
                 value={form.dataNascimento}
-                onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })}
+                onChange={(e) => atualizarCampoForm('dataNascimento', e.target.value)}
                 required
               />
             </div>
@@ -336,7 +437,7 @@ export function AnimaisPage() {
                 type="text"
                 placeholder="Ex.: Cão, Gato"
                 value={form.especie}
-                onChange={(e) => setForm({ ...form, especie: e.target.value })}
+                onChange={(e) => atualizarCampoForm('especie', e.target.value)}
                 required
               />
             </div>
@@ -348,7 +449,7 @@ export function AnimaisPage() {
                 type="text"
                 placeholder="Ex.: SRD, Poodle, Siamês"
                 value={form.raca}
-                onChange={(e) => setForm({ ...form, raca: e.target.value })}
+                onChange={(e) => atualizarCampoForm('raca', e.target.value)}
                 required
               />
             </div>

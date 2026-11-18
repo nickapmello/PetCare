@@ -23,6 +23,15 @@ export async function buscarPorId(req, res, next) {
   }
 }
 
+export async function verificarDuplicidade(req, res, next) {
+  try {
+    const resultado = await animalService.verificarDuplicidade(req.body);
+    return res.status(200).json(resultado);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function criar(req, res, next) {
   try {
     const animal = await animalService.criar(req.body);

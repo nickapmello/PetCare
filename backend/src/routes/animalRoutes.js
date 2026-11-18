@@ -7,6 +7,7 @@ const router = Router();
 router.use(autenticar);
 
 router.get('/', animalController.listar);
+router.post('/verificar-duplicidade', animalController.verificarDuplicidade);
 router.get('/:id/historico', animalController.consultarHistorico);
 router.get('/:id', animalController.buscarPorId);
 router.post('/', animalController.criar);

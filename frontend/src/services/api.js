@@ -36,6 +36,7 @@ export async function apiRequest(path, { method = 'GET', body, auth = true } = {
   if (!response.ok) {
     const err = new Error(data.erro || 'Ocorreu um erro ao processar a solicitação.');
     err.status = response.status;
+    err.detalhes = data.detalhes;
     throw err;
   }
 

@@ -20,6 +20,15 @@ export async function buscarPorId(req, res, next) {
   }
 }
 
+export async function verificarDuplicidade(req, res, next) {
+  try {
+    const resultado = await clienteService.verificarDuplicidade(req.body);
+    return res.status(200).json(resultado);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function criar(req, res, next) {
   try {
     const cliente = await clienteService.criar(req.body);

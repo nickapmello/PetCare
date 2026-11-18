@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CalendarClock,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { Modal } from '../components/Modal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { StatusBadge } from '../components/StatusBadge';
 import {
   formatarData,
@@ -46,6 +47,21 @@ export function AgendaPage() {
 
   // Modal Cancelar
   const [agendamentoCancelar, setAgendamentoCancelar] = useState(null);
+
+  const erroNovoRef = useRef(null);
+  const erroReagendarRef = useRef(null);
+
+  useEffect(() => {
+    if (erroNovo && erroNovoRef.current) {
+      erroNovoRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [erroNovo]);
+
+  useEffect(() => {
+    if (erroReagendar && erroReagendarRef.current) {
+      erroReagendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [erroReagendar]);
 
   async function carregarTudo(data = filtroData, status = filtroStatus) {
     setCarregando(true);
@@ -98,8 +114,19 @@ export function AgendaPage() {
     return formatarHora(fim.toISOString());
   }, [agendamentoReagendar, novaDataHora]);
 
+  const getAnimalLabel = useCallback((a) => a.nome, []);
+  const getAnimalDisplay = useCallback(
+    (a) => (a.cliente?.nome ? `${a.nome} (Tutor: ${a.cliente.nome})` : a.nome),
+    [],
+  );
+  const getAnimalFilterText = useCallback((a) => a.nome, []);
+  const getAnimalMeta = useCallback(
+    (a) => `Tutor: ${a.cliente?.nome || '—'} • ${a.especie}`,
+    [],
+  );
+
   function abrirNovoAgendamento() {
-    setAnimalId(animais[0]?.id ? String(animais[0].id) : '');
+    setAnimalId('');
     setServicosSelecionados([]);
     setDataHora('');
     setObservacoes('');
@@ -381,41 +408,41 @@ export function AgendaPage() {
         tamanho="lg"
       >
         {erroNovo && (
-          <div className="alert alert-error" role="alert">
+          <div ref={erroNovoRef} className="alert alert-error" role="alert">
             <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
             <span>{erroNovo}</span>
           </div>
         )}
 
         <form className="form-grid" onSubmit={handleCriarAgendamento}>
-          <div className="form-row-2">
-            <div className="field">
-              <label htmlFor="ag-animal">Animal</label>
-              <select
-                id="ag-animal"
-                value={animalId}
-                onChange={(e) => setAnimalId(e.target.value)}
-                required
-              >
-                <option value="">Selecione um animal...</option>
-                {animais.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.nome} (Tutor: {a.cliente?.nome})
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="field">
+            <label htmlFor="ag-animal">Animal</label>
+            <SearchableSelect
+              id="ag-animal"
+              items={animais}
+              value={animalId}
+              onChange={setAnimalId}
+              getLabel={getAnimalLabel}
+              getDisplayValue={getAnimalDisplay}
+              getFilterText={getAnimalFilterText}
+              getMeta={getAnimalMeta}
+              placeholder="Buscar ou selecionar animal pelo nome..."
+              emptyMessage="Nenhum animal encontrado"
+              clearLabel="Limpar animal selecionado"
+              openLabel="Abrir lista de animais"
+              closeLabel="Fechar lista de animais"
+            />
+          </div>
 
-            <div className="field">
-              <label htmlFor="ag-inicio">Data e horário de início</label>
-              <input
-                id="ag-inicio"
-                type="datetime-local"
-                value={dataHora}
-                onChange={(e) => setDataHora(e.target.value)}
-                required
-              />
-            </div>
+          <div className="field">
+            <label htmlFor="ag-inicio">Data e horário de início</label>
+            <input
+              id="ag-inicio"
+              type="datetime-local"
+              value={dataHora}
+              onChange={(e) => setDataHora(e.target.value)}
+              required
+            />
           </div>
 
           <div className="field">
@@ -489,7 +516,7 @@ export function AgendaPage() {
         onClose={() => setAgendamentoReagendar(null)}
       >
         {erroReagendar && (
-          <div className="alert alert-error" role="alert">
+          <div ref={erroReagendarRef} className="alert alert-error" role="alert">
             <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
             <span>{erroReagendar}</span>
           </div>

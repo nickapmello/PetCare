@@ -27,17 +27,6 @@ export function LoginPage() {
     }
   }
 
-  function preencherDemo(tipo) {
-    setErro('');
-    if (tipo === 'admin') {
-      setEmail('admin@petcare.com');
-      setSenha('Admin@123');
-    } else {
-      setEmail('atendente@petcare.com');
-      setSenha('Atendente@123');
-    }
-  }
-
   return (
     <div className="login-page">
       <div className="login-card">
@@ -85,27 +74,11 @@ export function LoginPage() {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={enviando} style={{ marginTop: '0.4rem', padding: '0.7rem' }}>
+          <button type="submit" className="btn btn-primary" disabled={enviando} style={{ marginTop: '0.35rem', padding: '0.72rem' }}>
             <LogIn size={17} />
             <span>{enviando ? 'Entrando...' : 'Entrar'}</span>
           </button>
         </form>
-
-        <div className="demo-box">
-          <strong>Contas fictícias de demonstração:</strong>
-          <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)' }}>
-            <div>Atendente: <code>atendente@petcare.com</code> / <code>Atendente@123</code></div>
-            <div>Administrador: <code>admin@petcare.com</code> / <code>Admin@123</code></div>
-          </div>
-          <div className="demo-actions">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => preencherDemo('atendente')}>
-              Preencher Atendente
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => preencherDemo('admin')}>
-              Preencher Administrador
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

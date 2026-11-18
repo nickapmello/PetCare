@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import { AppError } from '../utils/AppError.js';
+import { normalizarTexto } from '../utils/texto.js';
 
 function validarDadosAnimal({ nome, especie, raca, dataNascimento, clienteId }) {
   const erros = [];
@@ -44,22 +45,8 @@ export async function listar({ busca, clienteId } = {}) {
   const termo = String(busca || '').trim();
   const clienteIdNum = clienteId ? Number(clienteId) : null;
 
-  const where = {
-    ...(clienteIdNum ? { clienteId: clienteIdNum } : {}),
-    ...(termo
-      ? {
-          OR: [
-            { nome: { contains: termo, mode: 'insensitive' } },
-            { especie: { contains: termo, mode: 'insensitive' } },
-            { raca: { contains: termo, mode: 'insensitive' } },
-            { cliente: { nome: { contains: termo, mode: 'insensitive' } } },
-          ],
-        }
-      : {}),
-  };
-
-  return prisma.animal.findMany({
-    where,
+  const animais = await prisma.animal.findMany({
+    where: clienteIdNum ? { clienteId: clienteIdNum } : undefined,
     orderBy: { nome: 'asc' },
     include: {
       cliente: {
@@ -70,6 +57,48 @@ export async function listar({ busca, clienteId } = {}) {
       },
     },
   });
+
+  if (!termo) {
+    return animais;
+  }
+
+  const termoTexto = normalizarTexto(termo);
+  return animais.filter(
+    (a) =>
+      normalizarTexto(a.nome).includes(termoTexto) ||
+      normalizarTexto(a.especie).includes(termoTexto) ||
+      normalizarTexto(a.raca).includes(termoTexto) ||
+      normalizarTexto(a.cliente?.nome).includes(termoTexto),
+  );
+}
+
+export async function verificarDuplicidade({ nome, especie, clienteId, ignorarId } = {}) {
+  const clienteIdNum = Number(clienteId);
+  const nomeNorm = normalizarTexto(nome);
+  const especieNorm = normalizarTexto(especie);
+
+  if (!Number.isInteger(clienteIdNum) || clienteIdNum <= 0 || !nomeNorm || !especieNorm) {
+    return { possiveisDuplicados: [] };
+  }
+
+  const animaisDoTutor = await prisma.animal.findMany({
+    where: {
+      clienteId: clienteIdNum,
+      ...(ignorarId ? { NOT: { id: Number(ignorarId) } } : {}),
+    },
+    orderBy: { nome: 'asc' },
+    include: {
+      cliente: {
+        select: { id: true, nome: true, cpf: true, telefone: true },
+      },
+    },
+  });
+
+  const possiveisDuplicados = animaisDoTutor.filter(
+    (a) => normalizarTexto(a.nome) === nomeNorm && normalizarTexto(a.especie) === especieNorm,
+  );
+
+  return { possiveisDuplicados };
 }
 
 export async function buscarPorId(id) {

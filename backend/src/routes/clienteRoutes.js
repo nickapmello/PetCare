@@ -7,6 +7,7 @@ const router = Router();
 router.use(autenticar);
 
 router.get('/', clienteController.listar);
+router.post('/verificar-duplicidade', clienteController.verificarDuplicidade);
 router.get('/:id', clienteController.buscarPorId);
 router.post('/', clienteController.criar);
 router.put('/:id', clienteController.atualizar);

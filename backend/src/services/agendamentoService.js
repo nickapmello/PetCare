@@ -84,7 +84,7 @@ async function verificarDisponibilidade(tx, { inicio, fim, ignorarId = null }) {
 
   if (conflito) {
     throw new AppError(
-      `Horário indisponível: conflito com atendimento de ${conflito.animal.nome} (${formatarHoraLocal(conflito.dataHora)} até ${formatarHoraLocal(conflito.dataFim)}).`,
+      `Horário indisponível. Já existe um atendimento nesse período (${conflito.animal.nome} — ${formatarHoraLocal(conflito.dataHora)} até ${formatarHoraLocal(conflito.dataFim)}). Escolha outro horário.`,
       409,
     );
   }

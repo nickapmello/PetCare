@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, Eye, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { Modal } from '../components/Modal';
-import { formatarCpf, formatarData } from '../utils/formatters';
+import {
+  aplicarMascaraCpf,
+  aplicarMascaraTelefone,
+  formatarCpf,
+  formatarData,
+  validarCpf,
+} from '../utils/formatters';
 
 const FORM_INICIAL = { nome: '', cpf: '', telefone: '', email: '' };
 
@@ -17,6 +32,8 @@ export function ClientesPage() {
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState(FORM_INICIAL);
   const [erroForm, setErroForm] = useState('');
+  const [clienteCpfExistente, setClienteCpfExistente] = useState(null);
+  const [avisoDuplicidade, setAvisoDuplicidade] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
   const [clienteDetalhes, setClienteDetalhes] = useState(null);
@@ -45,6 +62,8 @@ export function ClientesPage() {
     setEditandoId(null);
     setForm(FORM_INICIAL);
     setErroForm('');
+    setClienteCpfExistente(null);
+    setAvisoDuplicidade(null);
     setModalFormAberto(true);
   }
 
@@ -57,7 +76,24 @@ export function ClientesPage() {
       email: cliente.email,
     });
     setErroForm('');
+    setClienteCpfExistente(null);
+    setAvisoDuplicidade(null);
     setModalFormAberto(true);
+  }
+
+  function localizarClienteNaLista(cliente) {
+    const termoBusca = formatarCpf(cliente.cpf);
+    setModalFormAberto(false);
+    setClienteCpfExistente(null);
+    setAvisoDuplicidade(null);
+    setBusca(termoBusca);
+    carregarClientes(termoBusca);
+  }
+
+  function atualizarCampoForm(campo, valor) {
+    setForm((prev) => ({ ...prev, [campo]: valor }));
+    if (clienteCpfExistente) setClienteCpfExistente(null);
+    if (avisoDuplicidade) setAvisoDuplicidade(null);
   }
 
   async function abrirDetalhes(cliente) {
@@ -70,18 +106,43 @@ export function ClientesPage() {
     }
   }
 
+  async function persistirNovoCliente() {
+    setSalvando(true);
+    setErroForm('');
+    try {
+      await apiRequest('/clientes', {
+        method: 'POST',
+        body: form,
+      });
+      setMensagemSucesso('Cliente cadastrado com sucesso.');
+      setAvisoDuplicidade(null);
+      setClienteCpfExistente(null);
+      setModalFormAberto(false);
+      await carregarClientes(busca);
+    } catch (err) {
+      setErroForm(err.message);
+      if (err.detalhes?.clienteExistente) {
+        setClienteCpfExistente(err.detalhes.clienteExistente);
+      }
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function handleSalvar(e) {
     e.preventDefault();
     setErroForm('');
     setMensagemSucesso('');
+    setClienteCpfExistente(null);
 
-    const cpfDigitos = form.cpf.replace(/\D/g, '');
+    const isEdicao = Boolean(editandoId);
+
     if (form.nome.trim().length < 2) {
       setErroForm('Informe o nome completo do cliente.');
       return;
     }
-    if (cpfDigitos.length !== 11) {
-      setErroForm('O CPF deve conter 11 dígitos.');
+    if (!isEdicao && !validarCpf(form.cpf)) {
+      setErroForm('Informe um CPF válido com 11 dígitos.');
       return;
     }
     if (form.telefone.replace(/\D/g, '').length < 8) {
@@ -93,25 +154,52 @@ export function ClientesPage() {
       return;
     }
 
-    setSalvando(true);
-    try {
-      if (editandoId) {
+    if (isEdicao) {
+      setSalvando(true);
+      try {
         await apiRequest(`/clientes/${editandoId}`, {
           method: 'PUT',
-          body: form,
+          body: {
+            nome: form.nome,
+            telefone: form.telefone,
+            email: form.email,
+          },
         });
         setMensagemSucesso('Cliente atualizado com sucesso.');
-      } else {
-        await apiRequest('/clientes', {
-          method: 'POST',
-          body: form,
-        });
-        setMensagemSucesso('Cliente cadastrado com sucesso.');
+        setModalFormAberto(false);
+        await carregarClientes(busca);
+      } catch (err) {
+        // Mantém o formulário preenchido em caso de erro (UC01 F1)
+        setErroForm(err.message);
+      } finally {
+        setSalvando(false);
       }
-      setModalFormAberto(false);
-      await carregarClientes(busca);
+      return;
+    }
+
+    // No cadastro, verifica antes no banco se já existe o CPF ou dados parecidos
+    setSalvando(true);
+    try {
+      const checagem = await apiRequest('/clientes/verificar-duplicidade', {
+        method: 'POST',
+        body: form,
+      });
+
+      if (checagem.bloqueadoPorCpf && checagem.clienteExistente) {
+        setErroForm('Já existe um cliente cadastrado com este CPF.');
+        setClienteCpfExistente(checagem.clienteExistente);
+        setAvisoDuplicidade(null);
+        return;
+      }
+
+      if (checagem.possiveisDuplicados?.length > 0) {
+        setAvisoDuplicidade(checagem.possiveisDuplicados);
+        return;
+      }
+
+      setSalvando(false);
+      await persistirNovoCliente();
     } catch (err) {
-      // Mantém o formulário preenchido em caso de erro (UC01 F1)
       setErroForm(err.message);
     } finally {
       setSalvando(false);
@@ -264,9 +352,77 @@ export function ClientesPage() {
         onClose={() => setModalFormAberto(false)}
       >
         {erroForm && (
-          <div className="alert alert-error" role="alert">
-            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-            <span>{erroForm}</span>
+          <div className="alert alert-error" role="alert" style={{ flexDirection: 'column' }}>
+            <div className="alert-header">
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <span>{erroForm}</span>
+            </div>
+            {clienteCpfExistente && (
+              <>
+                <ul className="alert-details-list">
+                  <li>
+                    <strong>{clienteCpfExistente.nome}</strong> — CPF {formatarCpf(clienteCpfExistente.cpf)} •{' '}
+                    {clienteCpfExistente.telefone} • {clienteCpfExistente.email}
+                  </li>
+                </ul>
+                <div className="alert-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      const alvo = clienteCpfExistente;
+                      setModalFormAberto(false);
+                      abrirDetalhes(alvo);
+                    }}
+                  >
+                    Ver cadastro existente
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => localizarClienteNaLista(clienteCpfExistente)}
+                  >
+                    Localizar cliente na lista
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {avisoDuplicidade && avisoDuplicidade.length > 0 && (
+          <div className="alert alert-warning" role="status">
+            <div className="alert-header">
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <span>
+                <strong>Possível duplicidade detectada:</strong> encontramos cliente(s) com o mesmo nome e
+                telefone/e-mail parecido(s). Confira se não se trata da mesma pessoa:
+              </span>
+            </div>
+            <ul className="alert-details-list">
+              {avisoDuplicidade.map((dup) => (
+                <li key={dup.id}>
+                  <strong>{dup.nome}</strong> — CPF {formatarCpf(dup.cpf)} • {dup.telefone} • {dup.email}
+                </li>
+              ))}
+            </ul>
+            <div className="alert-actions">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => localizarClienteNaLista(avisoDuplicidade[0])}
+              >
+                Localizar cliente existente
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={salvando}
+                onClick={persistirNovoCliente}
+              >
+                {salvando ? 'Salvando...' : 'Prosseguir mesmo assim'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -277,7 +433,7 @@ export function ClientesPage() {
               id="cli-nome"
               type="text"
               value={form.nome}
-              onChange={(e) => setForm({ ...form, nome: e.target.value })}
+              onChange={(e) => atualizarCampoForm('nome', e.target.value)}
               required
             />
           </div>
@@ -289,10 +445,23 @@ export function ClientesPage() {
                 id="cli-cpf"
                 type="text"
                 placeholder="000.000.000-00"
-                value={form.cpf}
-                onChange={(e) => setForm({ ...form, cpf: e.target.value })}
-                required
+                maxLength={14}
+                value={editandoId ? formatarCpf(form.cpf) : form.cpf}
+                onChange={
+                  editandoId
+                    ? undefined
+                    : (e) => atualizarCampoForm('cpf', aplicarMascaraCpf(e.target.value))
+                }
+                readOnly={Boolean(editandoId)}
+                disabled={Boolean(editandoId)}
+                aria-readonly={Boolean(editandoId)}
+                required={!editandoId}
               />
+              {editandoId && (
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  O CPF não pode ser alterado após o cadastro.
+                </span>
+              )}
             </div>
 
             <div className="field">
@@ -301,8 +470,11 @@ export function ClientesPage() {
                 id="cli-telefone"
                 type="text"
                 placeholder="(43) 99999-9999"
+                maxLength={15}
                 value={form.telefone}
-                onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                onChange={(e) =>
+                  atualizarCampoForm('telefone', aplicarMascaraTelefone(e.target.value))
+                }
                 required
               />
             </div>
@@ -315,7 +487,7 @@ export function ClientesPage() {
               type="email"
               placeholder="cliente@exemplo.com"
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(e) => atualizarCampoForm('email', e.target.value)}
               required
             />
           </div>
